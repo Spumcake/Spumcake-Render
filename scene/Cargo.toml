@@ -1,0 +1,12 @@
+[package]
+name = "scene"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "Reads a place's scene file, a glTF 2.0 binary exported from its pre-vis builder, as the scene contract describes."
+
+[dependencies]
+gltf = { version = "=1.4.1", default-features = false, features = ["utils", "names", "extras"] }
+serde_json = "=1.0.152"
