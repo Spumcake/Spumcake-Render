@@ -11,9 +11,8 @@ description = "Renders Spumcake scene files the way the pre-vis builders do, on 
 bytemuck = { version = "=1.25.2", features = ["derive"] }
 png = "=0.18.1"
 pollster = "=0.4.0"
-# 3D Viewport Work's reader. Until both crates are committed side by side, it is read from that session's
-# worktree; at the merge this becomes "../scene".
-scene = { path = "../../3d-viewport/scene" }
+# 3D Viewport Work's reader of scene files, beside this crate.
+scene = { path = "../scene" }
 wgpu = "=30.0.1"
 
 [dev-dependencies]
