@@ -18,6 +18,11 @@ fn diner() -> Option<Vec<(String, scene::Scene)>> {
             scenes.push((name, scene::read(&std::fs::read(&path).unwrap()).unwrap()));
         }
     }
+    // A builder exported again keeps only its newest export, by the time
+    // its file's name starts with.
+    scenes.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut seen = std::collections::HashSet::new();
+    scenes.retain(|(_, scene)| seen.insert(scene.builder.clone()));
     scenes.sort_by(|a, b| a.0.cmp(&b.0));
     Some(scenes)
 }
@@ -76,4 +81,28 @@ fn renders_are_linked_only_from_the_scene_that_made_them() {
     assert_eq!(linked.iter().filter(|(_, r)| r.contains("2026-11-10_05-21-previs-")).count(), 6);
     assert!(linked.iter().any(|(c, r)| c == "door-close" && r.contains("2026-11-12_21-57")));
     assert!(linked.iter().any(|(c, r)| c == "far-end-wall" && r.contains("2026-11-11_17-20")));
+}
+
+#[test]
+fn the_newest_exports_say_which_groups_are_named_and_each_renders_look() {
+    let Some(scenes) = diner() else { return };
+    let newest = scenes.iter().map(|(name, _)| &name[..16]).max().unwrap().to_string();
+    if !scenes.iter().all(|(name, _)| name.starts_with(&newest)) {
+        eprintln!("the diner's newest exports are not all from one time, so named and reference_look are not checked");
+        return;
+    }
+    for (name, scene) in &scenes {
+        let unnamed: Vec<&str> = scene.objects.iter().filter(|o| !o.named).map(|o| o.name.as_str()).collect();
+        assert_eq!(unnamed, ["floor", "ceiling", "back wall", "far end wall", "near end wall"], "{name}");
+        for camera in &scene.cameras {
+            match (&camera.reference_file, camera.reference_look.as_deref()) {
+                (Some(file), Some(look)) => {
+                    let expected = if file.ends_with("-simple.mp4") { "simple" } else { "grey" };
+                    assert_eq!(look, expected, "{name}: {}", camera.name);
+                }
+                (Some(file), None) => panic!("{name}: {} names {file} with no look", camera.name),
+                (None, _) => {}
+            }
+        }
+    }
 }
