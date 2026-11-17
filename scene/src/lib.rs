@@ -85,6 +85,10 @@ pub struct Object {
     /// The words the builder's labelled renders show for its group, such as
     /// "plates and mugs".
     pub label_text: String,
+    /// Whether the builder's labelled renders name its group: false for the
+    /// groups the builder's own skip list leaves unnamed, such as the floor
+    /// and the walls. True when the file does not say.
+    pub named: bool,
     /// Its place in the builder's list, which is the order it draws in: the
     /// builder's depth test keeps the first-drawn face on ties.
     pub builder_id: u32,
@@ -157,6 +161,9 @@ pub struct Camera {
     /// The published render this scene's own builder made from it, as a path
     /// in the project, if any.
     pub reference_file: Option<String>,
+    /// The look that render was drawn in, such as "grey" or "simple", when
+    /// the file says.
+    pub reference_look: Option<String>,
 }
 
 /// The door's swing: the hinge's turn about the room's z, held at each key
@@ -355,6 +362,7 @@ fn object(
     let label = text(&record, "label").ok_or_else(|| fail("has no label"))?;
     let label_text = text(&record, "label_text").unwrap_or_else(|| label.clone());
     let builder_id = record.get("builder_id").and_then(Value::as_u64).ok_or_else(|| fail("has no builder_id"))? as u32;
+    let named = record.get("named").and_then(Value::as_bool).unwrap_or(true);
 
     let mut positions = Vec::new();
     let mut normals = Vec::new();
@@ -377,7 +385,7 @@ fn object(
             normals.push(corners[corner]);
         }
     }
-    Ok(Object { name: name.to_string(), kind, label, label_text, builder_id, positions, normals, rest, under_hinge })
+    Ok(Object { name: name.to_string(), kind, label, label_text, named, builder_id, positions, normals, rest, under_hinge })
 }
 
 fn camera(name: &str, node: &gltf::Node<'_>) -> Result<Camera, Error> {
@@ -398,6 +406,7 @@ fn camera(name: &str, node: &gltf::Node<'_>) -> Result<Camera, Error> {
         image_size: size(record.get("image_size")).ok_or_else(|| fail("has no image size"))?,
         canon: text(&record, "canon"),
         reference_file: text(&record, "reference_file"),
+        reference_look: text(&record, "reference_look"),
     })
 }
 
