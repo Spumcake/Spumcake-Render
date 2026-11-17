@@ -6,8 +6,8 @@
 //!   differ, and no more than 0.02% lie more than 2 pixels from an edge in either picture.
 //! - Each group of objects the builder's record lists in frame appears in the object pass, with its frame box
 //!   within 2 pixels.
-//! - The door swing, encoded the builder's way, stays within a mean difference of 0.05 grey levels per frame of
-//!   the published MP4. That needs ffmpeg, as the builder did.
+//! - Both door swings, the grey one and the simple one, encoded the builder's way, stay within a mean
+//!   difference of 0.05 grey levels per frame of the published MP4s. That needs ffmpeg, as the builders did.
 
 use spumcake_render::{Frame, Look, Renderer, Request, View, scene};
 use std::collections::BTreeMap;
@@ -181,18 +181,32 @@ fn every_group_the_builders_records_list_is_in_the_object_pass() {
 }
 
 #[test]
-fn the_door_swings_as_the_published_video_shows() {
+fn the_door_swings_as_the_published_videos_show() {
     let Some(last_order) = last_order() else { return };
     let scenes = scenes(&last_order);
-    let (_, scene) = &scenes["2026-11-14-19-56"];
-    let camera = scene.cameras.iter().find(|c| c.reference_file.as_deref().is_some_and(|r| r.ends_with("-simple.mp4"))).unwrap();
-    let published = last_order.join(camera.reference_file.as_ref().unwrap());
     let renderer = Renderer::software().unwrap();
-    let swing = scene.swing.as_ref().unwrap();
-    let frames = swing.times.len();
+    // The two published swings: the 19-13 builder's in grey, and the 19-56 builder's in the simple look, the
+    // motion reference.
+    for (builder, look, video) in [("2026-11-14-19-13", Look::Grey, "-door-swing.mp4"), ("2026-11-14-19-56", Look::Simple, "-door-swing-simple.mp4")] {
+        let (_, scene) = &scenes[builder];
+        let camera = scene.cameras.iter().find(|c| c.reference_file.as_deref().is_some_and(|r| r.ends_with(video))).unwrap();
+        let published = last_order.join(camera.reference_file.as_ref().unwrap());
+        let frames = scene.swing.as_ref().unwrap().times.len();
+        let means = swing_differences(&renderer, scene, &camera.name, look, &published, frames);
+        let worst = means.iter().cloned().fold(0.0, f64::max);
+        eprintln!("{builder} {look:?}: {frames} frames, at most {worst:.4} grey levels from the published video");
+        for (i, mean) in means.iter().enumerate() {
+            assert!(*mean <= 0.05, "{builder} frame {i}: a mean difference of {mean:.4} grey levels from the published video");
+        }
+    }
+}
+
+/// Renders the swing at 24 frames a second, encodes it as the builders encoded theirs, and gives each frame's
+/// mean difference from the published video, in grey levels.
+fn swing_differences(renderer: &Renderer, scene: &scene::Scene, camera: &str, look: Look, published: &Path, frames: usize) -> Vec<f64> {
     let (w, h) = (1664u32, 928u32);
     // The frames go straight into ffmpeg, encoded as the builder encoded its own, to a file on disk.
-    let ours = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("door-swing-simple.mp4");
+    let ours = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("door-swing-{look:?}.mp4"));
     let mut encoder = std::process::Command::new("ffmpeg")
         .args(["-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", &format!("{w}x{h}"), "-framerate", "24", "-i", "-"])
         .args(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "16"])
@@ -204,7 +218,7 @@ fn the_door_swings_as_the_published_video_shows() {
         use std::io::Write;
         let stdin = encoder.stdin.as_mut().unwrap();
         for i in 0..frames {
-            let request = Request { camera: View::Named(&camera.name), look: Look::Simple, width: w, height: h, time: i as f64 / 24.0 };
+            let request = Request { camera: View::Named(camera), look, width: w, height: h, time: i as f64 / 24.0 };
             stdin.write_all(&renderer.render(scene, &request).unwrap().colour).unwrap();
         }
     }
@@ -220,14 +234,15 @@ fn the_door_swings_as_the_published_video_shows() {
         assert!(output.status.success());
         output.stdout
     };
-    let (a, b) = (decode(&published), decode(&ours));
+    let (a, b) = (decode(published), decode(&ours));
     let size = (w * h) as usize;
     assert_eq!((a.len() / size, b.len() / size), (frames, frames));
-    for i in 0..frames {
-        let (fa, fb) = (&a[i * size..(i + 1) * size], &b[i * size..(i + 1) * size]);
-        let mean = fa.iter().zip(fb).map(|(x, y)| (*x as i32 - *y as i32).unsigned_abs() as f64).sum::<f64>() / size as f64;
-        assert!(mean <= 0.05, "frame {i}: a mean difference of {mean:.4} grey levels from the published video");
-    }
+    (0..frames)
+        .map(|i| {
+            let (fa, fb) = (&a[i * size..(i + 1) * size], &b[i * size..(i + 1) * size]);
+            fa.iter().zip(fb).map(|(x, y)| (*x as i32 - *y as i32).unsigned_abs() as f64).sum::<f64>() / size as f64
+        })
+        .collect()
 }
 
 /// A PNG's samples, as written: 8-bit bytes, or 16-bit values.
