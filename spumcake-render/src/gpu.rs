@@ -304,12 +304,12 @@ pub fn device_on(software: bool) -> Result<(wgpu::Device, wgpu::Queue, String), 
         compatible_surface: None,
         ..Default::default()
     }))
-    .map_err(|e| Error::Gpu(format!("no GPU adapter: {e}")))?;
+    .map_err(|e| Error::NoDevice(format!("{e}")))?;
     let info = adapter.get_info();
     let (device, queue) = pollster::block_on(
         adapter.request_device(&wgpu::DeviceDescriptor { label: Some("spumcake-render"), ..Default::default() }),
     )
-    .map_err(|e| Error::Gpu(format!("no GPU device on {}: {e}", info.name)))?;
+    .map_err(|e| Error::NoDevice(format!("{} would not open: {e}", info.name)))?;
     Ok((device, queue, format!("{} ({:?})", info.name, info.backend)))
 }
 

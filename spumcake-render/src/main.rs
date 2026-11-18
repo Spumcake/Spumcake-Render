@@ -1,6 +1,6 @@
 //! The command line: renders one frame of a scene file to PNG files, for Spumcake-Skills and Claude Code.
 
-use spumcake_render::{Frame, Look, Renderer, Request, View, scene};
+use spumcake_render::{Error, Frame, Look, Renderer, Request, View, scene};
 use std::process::ExitCode;
 
 const USAGE: &str = "\
@@ -13,7 +13,13 @@ usage: spumcake-render render <scene.glb> --camera <name> --look grey|coded|simp
 --objects  which object each pixel shows, a 16-bit grey PNG: 0 where nothing is drawn, otherwise the object's
            number, with <file.png>.json beside it naming each number
 
-With SPUMCAKE_RENDER_ADAPTER=software it draws with the system's software renderer, such as Mesa's lavapipe.";
+With SPUMCAKE_RENDER_ADAPTER=software it draws with the system's software renderer, such as Mesa's lavapipe.
+
+It exits with 0 when the files are written, 1 when something else fails, 2 when the command is not understood,
+and 3, with a message starting \"no graphics device\", when it finds no GPU or software renderer to draw with.";
+
+/// The exit code when no graphics device answers, so a caller can tell the user what to install.
+const NO_DEVICE: u8 = 3;
 
 struct Args {
     scene: String,
@@ -84,10 +90,22 @@ fn grey16(values: impl Iterator<Item = u16>) -> Vec<u8> {
     values.flat_map(u16::to_be_bytes).collect()
 }
 
-fn run(args: Args) -> Result<(), String> {
+/// Why a render failed, with the exit code that says so.
+struct Failure(u8, String);
+
+impl From<String> for Failure {
+    fn from(text: String) -> Failure {
+        Failure(1, text)
+    }
+}
+
+fn run(args: Args) -> Result<(), Failure> {
     let bytes = std::fs::read(&args.scene).map_err(|e| format!("cannot read {}: {e}", args.scene))?;
     let scene = scene::read(&bytes).map_err(|e| format!("{}: {e}", args.scene))?;
-    let renderer = Renderer::new().map_err(|e| e.to_string())?;
+    let renderer = Renderer::new().map_err(|e| match e {
+        Error::NoDevice(_) => Failure(NO_DEVICE, e.to_string()),
+        e => Failure(1, e.to_string()),
+    })?;
     let request =
         Request { camera: View::Named(&args.camera), look: args.look, width: args.width, height: args.height, time: args.time };
     let frame: Frame = renderer.render(&scene, &request).map_err(|e| e.to_string())?;
@@ -143,12 +161,18 @@ fn main() -> ExitCode {
             println!("spumcake-render {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        Some("render") => match parse(&args[1..]).and_then(run) {
-            Ok(()) => ExitCode::SUCCESS,
+        Some("render") => match parse(&args[1..]) {
             Err(e) => {
-                eprintln!("spumcake-render: {e}");
-                ExitCode::FAILURE
+                eprintln!("spumcake-render: {e}\n\n{USAGE}");
+                ExitCode::from(2)
             }
+            Ok(args) => match run(args) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(Failure(code, e)) => {
+                    eprintln!("spumcake-render: {e}");
+                    ExitCode::from(code)
+                }
+            },
         },
         _ => {
             eprintln!("{USAGE}");

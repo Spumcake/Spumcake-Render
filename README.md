@@ -40,8 +40,12 @@ spumcake-render --version
 
 - `--out` is the picture, an RGB PNG.
 - `--depth` is a 16-bit grey PNG in millimetres along the camera's forward axis, 0 where nothing is drawn.
-- `--objects` is a 16-bit grey PNG: 0 where nothing is drawn, otherwise the object's number, with
-  `<file.png>.json` beside it naming each number.
+- `--objects` is a 16-bit grey PNG: 0 where nothing is drawn, otherwise the object's number, its index in the
+  scene plus one, with `<file.png>.json` beside it naming each number: `{"0": null, "1": "<object name>", …}`.
+- `--version` prints `spumcake-render <version>`, such as `spumcake-render 0.1.0`.
+
+It exits with 0 when the files are written, 1 when something else fails, 2 when the command is not understood,
+and 3, with a message starting "no graphics device", when it finds no GPU or software renderer to draw with.
 
 ## Checks
 

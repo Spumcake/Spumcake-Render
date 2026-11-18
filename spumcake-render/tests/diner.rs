@@ -124,7 +124,8 @@ fn every_group_the_builders_records_list_is_in_the_object_pass() {
     let scenes = scenes(&last_order);
     let renderer = Renderer::software().unwrap();
     let mut records = 0;
-    for entry in std::fs::read_dir(last_order.join("working")).unwrap() {
+    // The agent's files, `agent/`, once `working/` (spumcake-benchmarks 5ef168d, 2026-11-17).
+    for entry in std::fs::read_dir(last_order.join("agent")).unwrap() {
         let path = entry.unwrap().path();
         if !path.to_string_lossy().ends_with("-grey.record.json") {
             continue;

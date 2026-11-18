@@ -87,7 +87,9 @@ pub enum Error {
     NoSimpleLook,
     /// A frame must be at least one pixel each way.
     Size(u32, u32),
-    /// The GPU could not be reached, or failed.
+    /// No GPU or software renderer answered, so nothing can be drawn.
+    NoDevice(String),
+    /// The GPU failed while drawing.
     Gpu(String),
 }
 
@@ -98,6 +100,11 @@ impl std::fmt::Display for Error {
             Error::Kind(kind) => write!(f, "the look gives nothing for the kind \"{kind}\""),
             Error::NoSimpleLook => write!(f, "the scene file has no simple look"),
             Error::Size(w, h) => write!(f, "a frame of {w}x{h} pixels is too small"),
+            Error::NoDevice(why) => write!(
+                f,
+                "no graphics device: {why}. With no GPU, set SPUMCAKE_RENDER_ADAPTER=software to use a software renderer, \
+                 such as Mesa's lavapipe, once it is installed"
+            ),
             Error::Gpu(text) => f.write_str(text),
         }
     }
